@@ -116,14 +116,15 @@ func getMetrics(cert *x509.Certificate, now time.Time) map[string]interface{} {
 	return metrics
 }
 
-// Gather adds metrics into the accumulator.
+// Gather adds metrics and errors into the accumulator.
 func (sc *SSLCert) Gather(acc telegraf.Accumulator) error {
 	now := time.Now()
 
 	for _, server := range sc.Servers {
 		cert, err := getRemoteCert(server, sc.Timeout*time.Second, sc.CloseConn, sc.UnsetCerts)
 		if err != nil {
-			return fmt.Errorf("cannot get remote SSL cert '%s': %s", server, err)
+			acc.AddError(fmt.Errorf("cannot get remote SSL cert '%s': %s", server, err))
+			break
 		}
 
 		tags := map[string]string{
@@ -138,7 +139,8 @@ func (sc *SSLCert) Gather(acc telegraf.Accumulator) error {
 	for _, file := range sc.Files {
 		cert, err := getLocalCert(file)
 		if err != nil {
-			return fmt.Errorf("cannot get local SSL cert '%s': %s", file, err)
+			acc.AddError(fmt.Errorf("cannot get local SSL cert '%s': %s", file, err))
+			break
 		}
 
 		tags := map[string]string{

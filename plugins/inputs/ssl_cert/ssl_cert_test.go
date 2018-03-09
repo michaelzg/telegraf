@@ -130,8 +130,8 @@ func TestGatherRemote(t *testing.T) {
 		error := false
 
 		acc := testutil.Accumulator{}
-		err = sc.Gather(&acc)
-		if err != nil {
+		_ = sc.Gather(&acc)
+		if len(acc.Errors) != 0 {
 			error = true
 		}
 
@@ -185,8 +185,8 @@ func TestGatherLocal(t *testing.T) {
 		error := false
 
 		acc := testutil.Accumulator{}
-		err = sc.Gather(&acc)
-		if err != nil {
+		_ = sc.Gather(&acc)
+		if len(acc.Errors) != 0 {
 			error = true
 		}
 
