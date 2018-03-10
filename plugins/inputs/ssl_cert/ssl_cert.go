@@ -113,12 +113,14 @@ func getMetrics(cert *x509.Certificate, now time.Time) map[string]interface{} {
 	expiry := int(cert.NotAfter.Sub(now).Seconds())
 	startdate := int(cert.NotBefore.Unix())
 	enddate := int(cert.NotAfter.Unix())
+	issuer := cert.Issuer.CommonName
 
 	metrics := map[string]interface{}{
 		"age":       age,
 		"expiry":    expiry,
 		"startdate": startdate,
 		"enddate":   enddate,
+		"issuer":    issuer,
 	}
 
 	return metrics

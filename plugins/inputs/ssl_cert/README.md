@@ -13,6 +13,7 @@ file or network connection.
   #files = []
   ## List of servers
   #servers = []
+  #set_sni = false
   ## Timeout for SSL connection
   #timeout = 5
 ```
@@ -23,12 +24,14 @@ file or network connection.
 - `ssl_cert`
   - tags:
     - `server` (only if `servers` parameter is defined)
+    - `sni_set` (only if `servers` parameter is defined)
     - `file` (only if `files` parameter is defined)
   - fields:
     - `expiry` (int, seconds)
     - `age` (int, seconds)
     - `startdate` (int, seconds)
     - `enddate` (int, seconds)
+    - `issuer` (string, Issuer CN)
 
 
 ### Example output
