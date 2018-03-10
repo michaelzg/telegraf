@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -19,6 +20,8 @@ const sampleConfig = `
   # files = []
   ## List of servers
   # servers = []
+	## Whether to perform separate SNI checks on each server
+	# set_sni = false
   ## Timeout for SSL connection
   # timeout = 5
 `
@@ -29,6 +32,7 @@ type SSLCert struct {
 	Servers []string      `toml:"servers"`
 	Files   []string      `toml:"files"`
 	Timeout time.Duration `toml:"timeout"`
+	SetSNI  bool          `toml:"set_sni"`
 
 	// For tests
 	CloseConn  bool
@@ -45,9 +49,13 @@ func (sc *SSLCert) SampleConfig() string {
 	return sampleConfig
 }
 
-func getRemoteCert(server string, timeout time.Duration, closeConn bool, unsetCerts bool) (*x509.Certificate, error) {
+func getRemoteCert(server string, timeout time.Duration, sni string, closeConn bool, unsetCerts bool) (*x509.Certificate, error) {
 	tlsCfg := &tls.Config{
 		InsecureSkipVerify: true,
+	}
+
+	if sni != "" {
+		tlsCfg.ServerName = sni
 	}
 
 	ipConn, err := net.DialTimeout("tcp", server, timeout)
@@ -116,24 +124,58 @@ func getMetrics(cert *x509.Certificate, now time.Time) map[string]interface{} {
 	return metrics
 }
 
+// example.org:443 returns example.org
+// example.org returns example.org
+func getHostName(addr string) string {
+	colonPos := strings.LastIndex(addr, ":")
+	if colonPos == -1 {
+		colonPos = len(addr)
+	}
+	return addr[:colonPos]
+}
+
+func gatherRemoteCertMetrics(sc *SSLCert, acc telegraf.Accumulator, now time.Time, server string, setSNI bool) error {
+	hostname := ""
+	sniSet := "no"
+	if setSNI {
+		hostname = getHostName(server)
+		sniSet = "yes"
+	}
+
+	cert, err := getRemoteCert(server, sc.Timeout*time.Second, hostname, sc.CloseConn, sc.UnsetCerts)
+	if err != nil {
+		return fmt.Errorf("cannot get remote SSL cert '%s': %s", server, err)
+	}
+
+	tags := map[string]string{
+		"server":  server,
+		"sni_set": sniSet,
+	}
+
+	fields := getMetrics(cert, now)
+	fields["sni_hostname"] = hostname
+
+	acc.AddFields("ssl_cert", fields, tags)
+
+	return nil
+}
+
 // Gather adds metrics and errors into the accumulator.
 func (sc *SSLCert) Gather(acc telegraf.Accumulator) error {
 	now := time.Now()
 
 	for _, server := range sc.Servers {
-		cert, err := getRemoteCert(server, sc.Timeout*time.Second, sc.CloseConn, sc.UnsetCerts)
-		if err != nil {
-			acc.AddError(fmt.Errorf("cannot get remote SSL cert '%s': %s", server, err))
-			break
+		errWithoutSNI := gatherRemoteCertMetrics(sc, acc, now, server, false)
+		if errWithoutSNI != nil {
+			acc.AddError(errWithoutSNI)
 		}
 
-		tags := map[string]string{
-			"server": server,
+		if sc.SetSNI {
+			errWithSNI := gatherRemoteCertMetrics(sc, acc, now, server, true)
+			if errWithSNI != nil {
+				acc.AddError(errWithSNI)
+			}
 		}
-
-		fields := getMetrics(cert, now)
-
-		acc.AddFields("ssl_cert", fields, tags)
 	}
 
 	for _, file := range sc.Files {
@@ -160,6 +202,7 @@ func init() {
 		return &SSLCert{
 			Files:   []string{},
 			Servers: []string{},
+			SetSNI:  false,
 			Timeout: 5,
 		}
 	})

@@ -76,14 +76,16 @@ func TestGatherRemote(t *testing.T) {
 	tests := []struct {
 		server  string
 		timeout time.Duration
+		sni     bool
 		close   bool
 		unset   bool
 		error   bool
 	}{
-		{server: ":99999", timeout: 0, close: false, unset: false, error: true},
-		{server: "", timeout: 5, close: false, unset: false, error: false},
-		{server: "", timeout: 5, close: false, unset: true, error: true},
-		{server: "", timeout: 0, close: true, unset: false, error: true},
+		{server: ":99999", timeout: 0, sni: false, close: false, unset: false, error: true},
+		{server: "example.org:443", timeout: 5, sni: false, close: false, unset: false, error: false},
+		{server: "", timeout: 5, sni: false, close: false, unset: false, error: false},
+		{server: "", timeout: 5, sni: false, close: false, unset: true, error: true},
+		{server: "", timeout: 0, sni: false, close: true, unset: false, error: true},
 	}
 
 	for i, test := range tests {
@@ -123,6 +125,7 @@ func TestGatherRemote(t *testing.T) {
 		sc := SSLCert{
 			Servers:    []string{test.server},
 			Timeout:    test.timeout,
+			SetSNI:     test.sni,
 			CloseConn:  test.close,
 			UnsetCerts: test.unset,
 		}
